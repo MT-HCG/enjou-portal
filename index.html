@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>炎上モニター</title>
+<style>
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #e1e4ea; --accent: #2c5cc5;
+  --s: #7a0f1f; --a: #c62828; --b: #e06c00; --c: #b88a00; --ref: #7b8494;
+  --new: #c62828; --upd: #2c5cc5; --chip: #eef1f6; --shadow: 0 1px 2px rgba(20, 30, 50, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171d; --panel: #1d2129; --ink: #e8ebf1; --muted: #9aa3b4; --line: #2e3440; --accent: #7aa2ff;
+    --s: #ff6b81; --a: #ff6b6b; --b: #ffa24d; --c: #e6c34d; --ref: #9aa3b4;
+    --new: #ff7b7b; --upd: #7aa2ff; --chip: #262b35; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; }
+button, select, input { font: inherit; color: inherit; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
+header { background: var(--panel); border-bottom: 1px solid var(--line); }
+header .wrap { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding-top: 12px; padding-bottom: 12px; }
+h1 { font-size: 20px; margin: 0; }
+.meta { color: var(--muted); font-size: 13px; flex: 1 1 320px; }
+.user { font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; text-decoration: underline; }
+.notice { margin: 16px 0 0; padding: 12px 16px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
+.notice.alert { border: 2px solid var(--new); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.notice.alert strong { color: var(--new); font-size: 17px; }
+.notice.warn { border-left: 4px solid var(--b); }
+.notice.error { border-left: 4px solid var(--a); white-space: pre-wrap; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.btn.primary { background: var(--new); border-color: var(--new); color: #fff; }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; box-shadow: var(--shadow); }
+h2 { font-size: 16px; margin: 0 0 12px; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.tile { border: 2px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel); cursor: pointer; text-align: left; }
+.tile .lv { font-size: 13px; font-weight: 600; }
+.tile .n { font-size: 26px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tile .sub { font-size: 12px; color: var(--muted); }
+.tile.off { opacity: .45; border-style: dashed; }
+.tile.on { border-color: currentColor; }
+.lv-S { color: var(--s); } .lv-A { color: var(--a); } .lv-B { color: var(--b); } .lv-C { color: var(--c); } .lv-参考 { color: var(--ref); }
+.tile .n, .tile .sub { color: var(--ink); }
+.hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 16px; }
+.filters label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.filters select, .filters input[type=search] { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; width: 100%; }
+.filters .check { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); padding-top: 18px; }
+.breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+.breakdown h3 { font-size: 13px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+.bar { display: grid; grid-template-columns: minmax(0, 9em) 1fr 2.5em; gap: 8px; align-items: center; width: 100%; padding: 3px 4px; border: 0; background: none; cursor: pointer; border-radius: 4px; text-align: left; font-size: 13px; }
+.bar:hover, .bar.sel { background: var(--chip); }
+.bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .track { display: block; height: 10px; background: var(--chip); border-radius: 5px; overflow: hidden; }
+.bar .fill { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+.bar .cnt { text-align: right; font-variant-numeric: tabular-nums; }
+.listhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.listhead select { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.cards { display: grid; gap: 10px; margin-top: 8px; }
+.card { border: 1px solid var(--line); border-left: 5px solid var(--ref); border-radius: 8px; padding: 10px 12px; cursor: pointer; background: var(--panel); text-align: left; width: 100%; }
+.card:hover { border-color: var(--accent); }
+.card.lv-S { border-left-color: var(--s); } .card.lv-A { border-left-color: var(--a); } .card.lv-B { border-left-color: var(--b); } .card.lv-C { border-left-color: var(--c); }
+.card { color: var(--ink); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.badge { border-radius: 4px; padding: 1px 7px; font-weight: 600; background: var(--chip); }
+.badge.level { color: #fff; }
+.badge.level.lv-S { background: var(--s); } .badge.level.lv-A { background: var(--a); } .badge.level.lv-B { background: var(--b); } .badge.level.lv-C { background: var(--c); } .badge.level.lv-参考 { background: var(--ref); }
+.badge.new { background: var(--new); color: #fff; } .badge.upd { background: var(--upd); color: #fff; }
+.card .where { font-weight: 600; margin-top: 4px; }
+.card .summary { margin: 2px 0 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .foot { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.empty { color: var(--muted); padding: 16px 0; }
+dialog { border: 0; border-radius: 12px; padding: 0; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 32px); background: var(--panel); color: var(--ink); }
+dialog::backdrop { background: rgba(10, 14, 22, .55); }
+.dlg-head { position: sticky; top: 0; background: var(--panel); padding: 14px 16px 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; }
+.dlg-body { padding: 12px 16px 20px; }
+.dlg-body dl { margin: 0; display: grid; grid-template-columns: 9em 1fr; gap: 6px 12px; }
+.dlg-body dt { color: var(--muted); font-size: 13px; }
+.dlg-body dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.open-link { display: inline-block; margin: 4px 0 14px; padding: 8px 14px; border-radius: 6px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+details.run { font-size: 13px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 640px) {
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+  .dlg-body dl { grid-template-columns: 1fr; gap: 0; }
+  .dlg-body dd { margin-bottom: 8px; }
+}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>炎上モニター</h1>
+  <div class="meta" id="meta">読み込み中…</div>
+  <div class="user" id="user"></div>
+</div></header>
+<main class="wrap" id="main">
+  <div class="notice" id="status">サインインしています…</div>
+</main>
+<dialog id="detail"></dialog>
+
+<script src="msal-browser.min.js"></script>
+<script>
+// Entra app registration for this viewer (IDs are public, not secrets). itemId/driveId point at
+// /炎上/アプリ用/enjou-data.json; while empty, the signed-in user's own OneDrive path is used (管理者のみ).
+const CFG = {
+  clientId: "40a68791-d94c-40e2-8d3b-8039c424b01c",  // Entra app "Enjou-Viewer"
+  tenantId: "9a479428-f83e-4a2e-b0f7-0fdac44a610d",
+  scopes: ["Files.Read.All"],
+  driveId: "",
+  itemId: "",
+  ownPath: "/炎上/アプリ用/enjou-data.json",
+};
+const LEVELS = ["S", "A", "B", "C", "参考"];
+const GRAPH = "https://graph.microsoft.com/v1.0";
+
+// ---- sign-in and data -------------------------------------------------------------------------
+const Auth = (() => {
+  let app = null, account = null;
+  async function init() {
+    if (!CFG.clientId) throw new Error("この画面はまだ設定中です（アプリ登録の ID が未設定）。");
+    app = new msal.PublicClientApplication({
+      auth: { clientId: CFG.clientId, authority: `https://login.microsoftonline.com/${CFG.tenantId}`,
+              redirectUri: location.origin + location.pathname },
+      cache: { cacheLocation: "localStorage" },
+    });
+    await app.initialize();
+    const r = await app.handleRedirectPromise();
+    account = (r && r.account) || app.getActiveAccount() || app.getAllAccounts()[0] || null;
+    if (!account) { await app.loginRedirect({ scopes: CFG.scopes }); return false; }
+    app.setActiveAccount(account);
+    return true;
+  }
+  async function token() {
+    try { return (await app.acquireTokenSilent({ scopes: CFG.scopes, account })).accessToken; }
+    catch (e) {
+      if (e instanceof msal.InteractionRequiredAuthError) await app.acquireTokenRedirect({ scopes: CFG.scopes, account });
+      throw e;
+    }
+  }
+  // Graph answers /content with a redirect browsers cannot follow under CORS: read the item, then its download URL.
+  async function loadData() {
+    const url = CFG.itemId
+      ? `${GRAPH}/drives/${encodeURIComponent(CFG.driveId)}/items/${encodeURIComponent(CFG.itemId)}`
+      : `${GRAPH}/me/drive/root:${CFG.ownPath.split("/").map(encodeURIComponent).join("/")}`;
+    const r = await fetch(url, { headers: { Authorization: "Bearer " + await token() } });
+    if (r.status === 404 || r.status === 403) throw new Error("データを開けませんでした。「アプリ用」フォルダーが共有されているか、管理者に確認してください。");
+    if (!r.ok) throw new Error(`OneDrive へのアクセスに失敗しました（${r.status}）。`);
+    const item = await r.json();
+    const d = await fetch(item["@microsoft.graph.downloadUrl"], { cache: "no-store" });
+    if (!d.ok) throw new Error(`データを読み込めませんでした（${d.status}）。`);
+    return d.json();
+  }
+  const switchAccount = () => app.loginRedirect({ scopes: CFG.scopes, prompt: "select_account" });
+  return { init, loadData, switchAccount, user: () => account && account.username };
+})();
+
+// ---- helpers ----------------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : "";
+const levelOf = c => LEVELS.includes(c["重要度"]) ? c["重要度"] : "参考";
+const ymd = d => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("enjou." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("enjou." + k, JSON.stringify(v)); } catch (e) {} },
+};
+
+// ---- state ------------------------------------------------------------------------------------
+let DATA = null, NEW = new Set(), UPD = new Set();
+const DEFAULT = { levels: ["S", "A", "B", "C"], category: "", area: "", shop: "", period: "", onlyNew: false, q: "", sort: "level" };
+let F = Object.assign({}, DEFAULT, store.get("filters", {}), { onlyNew: false, q: "" });
+
+function matches(c, skip) {
+  if (skip !== "level" && !F.levels.includes(levelOf(c))) return false;
+  if (skip !== "category" && F.category && c["リスクカテゴリー"] !== F.category) return false;
+  if (skip !== "area" && F.area && c["エリア"] !== F.area) return false;
+  if (skip !== "shop" && F.shop && c["店舗"] !== F.shop) return false;
+  if (F.period) {
+    const since = new Date(); since.setDate(since.getDate() - Number(F.period));
+    if ((c["初回発見日時"] || "").slice(0, 10) < ymd(since)) return false;
+  }
+  if (F.onlyNew && !NEW.has(c["案件ID"]) && !UPD.has(c["案件ID"])) return false;
+  if (F.q) {
+    const hay = Object.values(c).join("\n").toLowerCase();
+    if (!F.q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w))) return false;
+  }
+  return true;
+}
+const countBy = (rows, key) => {
+  const m = new Map();
+  rows.forEach(c => { const k = c[key] || "（空欄）"; m.set(k, (m.get(k) || 0) + 1); });
+  return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"));
+};
+const uniq = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+
+// ---- rendering --------------------------------------------------------------------------------
+function render() {
+  store.set("filters", { levels: F.levels, category: F.category, area: F.area, shop: F.shop, period: F.period, sort: F.sort });
+  const cases = DATA.cases;
+  const rows = cases.filter(c => matches(c));
+  const html = [];
+
+  // alert
+  const nNew = NEW.size, nUpd = UPD.size;
+  if (nNew || nUpd) {
+    html.push(`<div class="notice alert"><strong>🔔 新着 ${nNew}件・更新 ${nUpd}件</strong>
+      <span>${esc(DATA.first_import ? "初回の取り込みです（直近に見つかった案件を新着としています）" : "前回の取り込みから追加・更新された案件があります")}</span>
+      <button class="btn ${F.onlyNew ? "" : "primary"}" data-act="onlyNew">${F.onlyNew ? "すべて表示に戻す" : "新着・更新だけ表示"}</button></div>`);
+  } else {
+    html.push(`<div class="notice">新着はありません（前回の取り込みから追加・更新された案件はありません）。</div>`);
+  }
+  if (DATA.source_date !== ymd(new Date())) {
+    html.push(`<div class="notice warn">本日分の監視ファイルはまだ取り込まれていません。${esc(DATA.source_date)} 分を表示しています。</div>`);
+  }
+
+  // summary
+  const levelBase = cases.filter(c => matches(c, "level"));
+  html.push(`<section class="panel"><h2>サマリー</h2><div class="tiles">`);
+  for (const lv of LEVELS) {
+    const n = levelBase.filter(c => levelOf(c) === lv).length;
+    const fresh = levelBase.filter(c => levelOf(c) === lv && (NEW.has(c["案件ID"]) || UPD.has(c["案件ID"]))).length;
+    const on = F.levels.includes(lv);
+    html.push(`<button class="tile lv-${lv} ${on ? "on" : "off"}" data-level="${lv}" aria-pressed="${on}">
+      <div class="lv">重要度 ${lv}</div><div class="n">${n}</div>
+      <div class="sub">${on ? "表示中" : "非表示"}${fresh ? `・新着 ${fresh}` : ""}</div></button>`);
+  }
+  html.push(`</div><p class="hint">重要度の四角を押すと、表示する・しないを切り替えます（「参考」はポジティブな口コミなどの記録です）。</p>`);
+
+  const areas = uniq([...DATA.stores.map(s => s["エリア"]), ...cases.map(c => c["エリア"])]);
+  const shops = uniq([...DATA.stores.filter(s => !F.area || s["エリア"] === F.area).map(s => s["店舗"]),
+                      ...cases.filter(c => !F.area || c["エリア"] === F.area).map(c => c["店舗"])]);
+  const opt = (list, v, all) => `<option value="">${all}</option>` + list.map(x => `<option ${x === v ? "selected" : ""}>${esc(x)}</option>`).join("");
+  html.push(`<div class="filters">
+    <label>リスクカテゴリー<select data-f="category">${opt(uniq(cases.map(c => c["リスクカテゴリー"])), F.category, "すべて")}</select></label>
+    <label>エリア<select data-f="area">${opt(areas, F.area, "すべて")}</select></label>
+    <label>店舗<select data-f="shop">${opt(shops, F.shop, "すべて")}</select></label>
+    <label>初回発見<select data-f="period">${[["", "全期間"], ["7", "直近7日"], ["30", "直近30日"], ["90", "直近90日"]]
+      .map(([v, t]) => `<option value="${v}" ${v === F.period ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    <label>キーワード<input type="search" data-f="q" value="${esc(F.q)}" placeholder="例：車検、接客"></label>
+    <label class="check"><input type="checkbox" data-f="onlyNew" ${F.onlyNew ? "checked" : ""}>新着・更新のみ</label>
+  </div><p class="hint"><button class="linkbtn" data-act="reset">絞り込みを元に戻す</button></p>`);
+
+  const bars = (title, key, filterKey, limit) => {
+    const list = countBy(cases.filter(c => matches(c, filterKey)), key);
+    const max = Math.max(1, ...list.map(x => x[1]));
+    const shown = limit ? list.slice(0, limit) : list;
+    return `<div class="breakdown"><h3>${title}</h3>${shown.map(([k, n]) => `
+      <button class="bar ${F[filterKey] === k ? "sel" : ""}" data-bar="${filterKey}" data-v="${esc(k)}" title="${esc(k)}">
+        <span class="name">${esc(k)}</span><span class="track"><span class="fill" style="width:${(n / max * 100).toFixed(1)}%"></span></span>
+        <span class="cnt">${n}</span></button>`).join("") || `<div class="empty">該当なし</div>`}
+      ${limit && list.length > limit ? `<p class="hint">ほか ${list.length - limit} 店舗</p>` : ""}</div>`;
+  };
+  html.push(`<div class="breakdowns">${bars("リスクカテゴリー別", "リスクカテゴリー", "category")}${bars("エリア別", "エリア", "area")}${bars("店舗別（上位10）", "店舗", "shop", 10)}</div>
+    <p class="hint">棒を押すと、その項目で絞り込みます（もう一度押すと解除）。</p></section>`);
+
+  // list
+  const order = { level: (a, b) => LEVELS.indexOf(levelOf(a)) - LEVELS.indexOf(levelOf(b)) || b["最終更新日時"].localeCompare(a["最終更新日時"]),
+                  updated: (a, b) => b["最終更新日時"].localeCompare(a["最終更新日時"]),
+                  found: (a, b) => b["初回発見日時"].localeCompare(a["初回発見日時"]) };
+  const fresh = c => (NEW.has(c["案件ID"]) || UPD.has(c["案件ID"])) ? 0 : 1;
+  rows.sort((a, b) => fresh(a) - fresh(b) || order[F.sort](a, b));
+  html.push(`<section class="panel"><div class="listhead"><h2>案件一覧（${rows.length}件）</h2>
+    <label class="hint">並び順 <select data-f="sort">${[["level", "重要度が高い順"], ["updated", "更新が新しい順"], ["found", "発見が新しい順"]]
+      .map(([v, t]) => `<option value="${v}" ${v === F.sort ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+    <div class="cards">${rows.map(card).join("") || `<div class="empty">条件に合う案件はありません。</div>`}</div></section>`);
+
+  // monitoring status
+  const run = DATA.last_run || {};
+  html.push(`<details class="run"><summary>監視の実行状況：${esc(run["実行開始日時"] || "不明")} ${esc(run["最終ステータス"] || "")}</summary>
+    <p>新規案件数：${esc(run["新規案件数"] || "")}<br>確認できなかった範囲：${esc(run["未確認範囲"] || "")}</p></details>`);
+
+  $("main").innerHTML = html.join("");
+}
+
+function card(c) {
+  const lv = levelOf(c), id = c["案件ID"];
+  const mark = NEW.has(id) ? `<span class="badge new">新着</span>` : UPD.has(id) ? `<span class="badge upd">更新</span>` : "";
+  return `<button class="card lv-${lv}" data-id="${esc(id)}">
+    <div class="badges"><span class="badge level lv-${lv}">${esc(lv)}</span>${mark}
+      <span class="badge">${esc(c["リスクカテゴリー"])}</span>${c["副カテゴリー"] ? `<span>${esc(c["副カテゴリー"])}</span>` : ""}</div>
+    <div class="where">${esc(c["店舗"])}<span class="hint">　${esc(c["エリア"])}</span></div>
+    <div class="summary">${esc(c["投稿概要"])}</div>
+    <div class="foot"><span>発見 ${esc(c["初回発見日時"])}</span><span>更新 ${esc(c["最終更新日時"])}</span>
+      <span>${esc(c["主要情報源"])}</span><span>${esc(c["案件ステータス"])}</span></div></button>`;
+}
+
+const DETAIL_FIELDS = ["エリア", "店舗", "リスクカテゴリー", "副カテゴリー", "重要度", "拡散度", "関連性", "案件ステータス", "現在状態",
+  "投稿概要", "確認できた事実", "投稿者の主張", "未確認事項", "現在の拡散状況", "変化", "再燃状況", "継続監視要否",
+  "初回投稿日", "初回発見日時", "最終確認日時", "最終更新日時", "主要情報源", "投稿者区分", "社員起因リスク区分", "捕捉優先度", "備考", "案件ID"];
+
+function showDetail(id) {
+  const c = DATA.cases.find(x => x["案件ID"] === id);
+  if (!c) return;
+  const url = safeUrl(c["初回主要投稿URL"]);
+  const dlg = $("detail");
+  dlg.innerHTML = `<div class="dlg-head"><div class="badges"><span class="badge level lv-${levelOf(c)}">${esc(levelOf(c))}</span>
+      ${NEW.has(id) ? `<span class="badge new">新着</span>` : UPD.has(id) ? `<span class="badge upd">更新</span>` : ""}
+      <strong>${esc(c["店舗"])}</strong></div><button class="btn" data-act="close">閉じる</button></div>
+    <div class="dlg-body">${url ? `<a class="open-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">元の投稿を開く ↗</a>` : ""}
+    <dl>${DETAIL_FIELDS.filter(k => c[k]).map(k => `<dt>${esc(k)}</dt><dd>${esc(c[k])}</dd>`).join("")}</dl></div>`;
+  dlg.showModal();
+}
+
+// ---- events -----------------------------------------------------------------------------------
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-level],[data-bar],[data-act],[data-id]");
+  if (!t) return;
+  if (t.dataset.level) {
+    const lv = t.dataset.level;
+    F.levels = F.levels.includes(lv) ? F.levels.filter(x => x !== lv) : [...F.levels, lv];
+  } else if (t.dataset.bar) {
+    const k = t.dataset.bar, v = t.dataset.v;
+    F[k] = F[k] === v ? "" : v;
+    if (k === "area") F.shop = "";
+  } else if (t.dataset.act === "onlyNew") { F.onlyNew = !F.onlyNew; }
+  else if (t.dataset.act === "reset") { F = Object.assign({}, DEFAULT); }
+  else if (t.dataset.act === "close") { $("detail").close(); return; }
+  else if (t.dataset.act === "switch") { Auth.switchAccount(); return; }
+  else if (t.dataset.id) { showDetail(t.dataset.id); return; }
+  render();
+});
+document.addEventListener("change", e => {
+  const k = e.target.dataset && e.target.dataset.f;
+  if (!k || k === "q") return;
+  F[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  if (k === "area") F.shop = "";
+  render();
+});
+let typing;
+document.addEventListener("input", e => {
+  if (!(e.target.dataset && e.target.dataset.f === "q")) return;
+  clearTimeout(typing);
+  typing = setTimeout(() => {
+    F.q = e.target.value; render();
+    const box = document.querySelector('[data-f="q"]'); box.focus(); box.setSelectionRange(box.value.length, box.value.length);
+  }, 300);
+});
+$("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
+
+// ---- start ------------------------------------------------------------------------------------
+(async () => {
+  try {
+    if (window.ENJOU_PREVIEW_DATA) { DATA = window.ENJOU_PREVIEW_DATA; }
+    else {
+      if (!await Auth.init()) return;  // moved to the Microsoft sign-in page
+      $("user").innerHTML = `${esc(Auth.user())}<button class="linkbtn" data-act="switch">切り替え</button>`;
+      $("status").textContent = "OneDrive から読み込んでいます…";
+      DATA = await Auth.loadData();
+    }
+    NEW = new Set(DATA.new_ids || []); UPD = new Set(DATA.updated_ids || []);
+    $("meta").textContent = `取り込み ${DATA.generated_at}（${DATA.source_file}）・案件 ${DATA.cases.length}件・閲覧のみ`;
+    render();
+  } catch (e) {
+    $("meta").textContent = "";
+    $("main").innerHTML = `<div class="notice error">${esc(e.message || String(e))}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
