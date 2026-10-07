@@ -4,7 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>炎上モニター</title>
+<title>Enjō 炎上モニター</title>
+<link rel="icon" href="enjou.ico">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #f5f6f8; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #e1e4ea; --accent: #2c5cc5;
@@ -24,7 +29,10 @@ button, select, input { font: inherit; color: inherit; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
 header { background: var(--panel); border-bottom: 1px solid var(--line); }
 header .wrap { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding-top: 12px; padding-bottom: 12px; }
-h1 { font-size: 20px; margin: 0; }
+h1 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 8px; }
+h1 .mark { width: 30px; height: 30px; flex: none; }
+h1 .brand { font-family: "Nunito", "Segoe UI", sans-serif; font-weight: 900; font-size: 24px; color: #d6261b; letter-spacing: .5px; }
+@media (prefers-color-scheme: dark) { h1 .brand { color: #ff6b4a; } }
 .meta { color: var(--muted); font-size: 13px; flex: 1 1 320px; }
 .user { font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
 .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; text-decoration: underline; }
@@ -93,7 +101,14 @@ details.run { font-size: 13px; color: var(--muted); margin-top: 8px; }
 </head>
 <body>
 <header><div class="wrap">
-  <h1>炎上モニター</h1>
+  <h1><svg class="mark" viewBox="-60 -96 120 172" aria-hidden="true">
+      <defs>
+        <linearGradient id="flameOuter" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#b3120f"/><stop offset=".55" stop-color="#e32b1c"/><stop offset="1" stop-color="#ff5a2a"/></linearGradient>
+        <linearGradient id="flameInner" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff7a1a"/><stop offset="1" stop-color="#ffc23d"/></linearGradient>
+      </defs>
+      <path fill="url(#flameOuter)" d="M0,-92 C14,-62 52,-44 54,4 C56,44 30,72 0,72 C-30,72 -56,46 -54,8 C-52,-24 -30,-36 -26,-66 C-12,-50 -10,-34 -8,-24 C2,-46 0,-70 0,-92 Z"/>
+      <path fill="url(#flameInner)" d="M2,-26 C12,-6 30,6 30,30 C30,52 16,64 0,64 C-16,64 -30,52 -30,32 C-30,14 -18,4 -12,-12 C-6,-2 -4,6 -2,12 C6,0 6,-12 2,-26 Z"/>
+    </svg><span class="brand">Enjō</span><span>炎上モニター</span></h1>
   <div class="meta" id="meta">読み込み中…</div>
   <div class="user" id="user"></div>
 </div></header>
