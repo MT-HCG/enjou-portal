@@ -7,6 +7,7 @@
 <title>Enjō 炎上モニター</title>
 <link rel="icon" href="enjou.ico">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="炎上モニター">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
@@ -187,7 +188,8 @@ const Auth = (() => {
 })();
 
 // ---- shared staff: the data published with the page, encrypted with the passphrase ---------------
-// The desktop shortcut opens the page as …/#k=<passphrase>; the part after # never leaves the browser.
+// The desktop shortcut (or the iPhone home-screen icon) opens the page as …/#k=<passphrase>;
+// the part after # never leaves the browser.
 const Viewer = (() => {
   const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   async function load(passphrase) {
@@ -204,9 +206,8 @@ const Viewer = (() => {
   }
   function takeKey() {
     const m = /(?:^#|&)k=([^&]+)/.exec(location.hash);
-    if (!m) return "";
-    history.replaceState(null, "", location.pathname + location.search);  // keep the passphrase out of the address bar
-    return decodeURIComponent(m[1]);
+    // The passphrase stays in the address, so "ホーム画面に追加" on iPhone keeps it in the icon.
+    return m ? decodeURIComponent(m[1]) : "";
   }
   return { load, takeKey };
 })();
