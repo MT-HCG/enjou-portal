@@ -57,7 +57,7 @@ h2 { font-size: 16px; margin: 0 0 12px; }
 .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 16px; }
 .filters label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
-.filters select, .filters input[type=search] { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; width: 100%; }
+.filters select, .filters input[type=search], .filters input[type=password] { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; width: 100%; }
 .filters .check { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); padding-top: 18px; }
 .breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
 .breakdown h3 { font-size: 13px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
@@ -113,7 +113,7 @@ details.run { font-size: 13px; color: var(--muted); margin-top: 8px; }
   <div class="user" id="user"></div>
 </div></header>
 <main class="wrap" id="main">
-  <div class="notice" id="status">サインインしています…</div>
+  <div class="notice" id="status">読み込んでいます…</div>
 </main>
 <dialog id="detail"></dialog>
 
@@ -156,12 +156,12 @@ const Auth = (() => {
       throw e;
     }
     account = (r && r.account) || app.getActiveAccount() || app.getAllAccounts()[0] || null;
-    // Sign in with the profile and Files.Read (both need no admin consent); Files.Read.All is asked for
-    // only when a viewer other than the owner reads the shared file.
-    if (!account) { await app.loginRedirect({ scopes: ["User.Read", ...CFG.ownerScopes] }); return false; }
-    app.setActiveAccount(account);
-    return true;
+    if (account) app.setActiveAccount(account);
+    return !!account;
   }
+  // Sign in with the profile and Files.Read (both need no admin consent); Files.Read.All is asked for
+  // only when a viewer other than the owner reads the shared file.
+  const signIn = () => app.loginRedirect({ scopes: ["User.Read", ...CFG.ownerScopes] });
   async function token() {
     try { return (await app.acquireTokenSilent({ scopes: scopes(), account })).accessToken; }
     catch (e) {
@@ -183,7 +183,32 @@ const Auth = (() => {
     return d.json();
   }
   const switchAccount = () => app.loginRedirect({ scopes: ["User.Read"], prompt: "select_account" });
-  return { init, loadData, switchAccount, user: () => account && account.username };
+  return { init, signIn, loadData, switchAccount, user: () => account && account.username };
+})();
+
+// ---- shared staff: the data published with the page, encrypted with the passphrase ---------------
+// The desktop shortcut opens the page as …/#k=<passphrase>; the part after # never leaves the browser.
+const Viewer = (() => {
+  const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  async function load(passphrase) {
+    const r = await fetch(`enjou-data.enc.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`データを読み込めませんでした（${r.status}）。時間をおいて開き直してください。`);
+    const enc = await r.json();
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: bytes(enc.salt), iterations: enc.iter },
+                                              base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+    let plain;
+    try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes(enc.iv) }, key, bytes(enc.data)); }
+    catch (e) { throw new Error("合言葉が違います。アイコンが古い場合は、管理者から新しい ZIP を受け取ってください。"); }
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+  function takeKey() {
+    const m = /(?:^#|&)k=([^&]+)/.exec(location.hash);
+    if (!m) return "";
+    history.replaceState(null, "", location.pathname + location.search);  // keep the passphrase out of the address bar
+    return decodeURIComponent(m[1]);
+  }
+  return { load, takeKey };
 })();
 
 // ---- helpers ----------------------------------------------------------------------------------
@@ -370,21 +395,50 @@ document.addEventListener("input", e => {
 $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
 
 // ---- start ------------------------------------------------------------------------------------
+function show(data, who) {
+  DATA = data;
+  NEW = new Set(DATA.new_ids || []); UPD = new Set(DATA.updated_ids || []);
+  $("meta").textContent = `取り込み ${DATA.generated_at}（${DATA.source_file}）・案件 ${DATA.cases.length}件・閲覧のみ`;
+  if (who) $("user").innerHTML = who;
+  render();
+}
+function fail(e) {
+  $("meta").textContent = "";
+  $("main").innerHTML = `<div class="notice error">${esc(e.message || String(e))}</div>`;
+}
+async function openWithPassphrase(passphrase) {
+  $("main").innerHTML = `<div class="notice">読み込んでいます…</div>`;
+  show(await Viewer.load(passphrase), "共有用（閲覧のみ）");
+}
+function landing() {
+  $("meta").textContent = "";
+  $("main").innerHTML = `<section class="panel"><h2>炎上モニターを開く</h2>
+    <p>共有用のアイコンから開くと、そのまま表示されます。合言葉を入力して開くこともできます。</p>
+    <form id="passForm" class="filters" autocomplete="off">
+      <label>合言葉<input type="password" id="pass" required></label>
+      <label class="check"><button class="btn primary" type="submit">表示する</button></label>
+    </form>
+    <p class="hint">管理者の方：<button class="linkbtn" data-act="signin">Microsoft でサインイン</button></p></section>`;
+  $("passForm").addEventListener("submit", e => {
+    e.preventDefault();
+    openWithPassphrase($("pass").value.trim()).catch(err => { landing(); $("main").insertAdjacentHTML("afterbegin", `<div class="notice error">${esc(err.message)}</div>`); });
+  });
+}
+document.addEventListener("click", e => {
+  if (e.target.closest('[data-act="signin"]')) Auth.signIn();
+});
+
 (async () => {
   try {
-    if (window.ENJOU_PREVIEW_DATA) { DATA = window.ENJOU_PREVIEW_DATA; }
-    else {
-      if (!await Auth.init()) return;  // moved to the Microsoft sign-in page
-      $("user").innerHTML = `${esc(Auth.user())}<button class="linkbtn" data-act="switch">切り替え</button>`;
-      $("status").textContent = "OneDrive から読み込んでいます…";
-      DATA = await Auth.loadData();
-    }
-    NEW = new Set(DATA.new_ids || []); UPD = new Set(DATA.updated_ids || []);
-    $("meta").textContent = `取り込み ${DATA.generated_at}（${DATA.source_file}）・案件 ${DATA.cases.length}件・閲覧のみ`;
-    render();
+    if (window.ENJOU_PREVIEW_DATA) return show(window.ENJOU_PREVIEW_DATA);
+    const key = Viewer.takeKey();
+    if (key) return await openWithPassphrase(key);
+    if (!await Auth.init()) return landing();  // not signed in: passphrase or the administrator's sign-in
+    $("user").innerHTML = `${esc(Auth.user())}<button class="linkbtn" data-act="switch">切り替え</button>`;
+    $("main").innerHTML = `<div class="notice">OneDrive から読み込んでいます…</div>`;
+    show(await Auth.loadData());
   } catch (e) {
-    $("meta").textContent = "";
-    $("main").innerHTML = `<div class="notice error">${esc(e.message || String(e))}</div>`;
+    fail(e);
   }
 })();
 </script>
