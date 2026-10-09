@@ -380,7 +380,10 @@ document.addEventListener("click", e => {
     const k = t.dataset.bar, v = t.dataset.v;
     F[k] = F[k] === v ? "" : v;
     if (k === "area") F.shop = "";
-  } else if (t.dataset.act === "mode") { F.onlyNew = t.dataset.new === "1"; }
+  } else if (t.dataset.act === "mode") {
+    F.onlyNew = t.dataset.new === "1";
+    if (!F.onlyNew) F.levels = [...LEVELS];  // 全件: every importance, 参考 included
+  }
   // 全て表示: clear every filter and go back to 全件; 参考 stays hidden as on first opening.
   else if (t.dataset.act === "showall") { F = Object.assign({}, DEFAULT, { sort: F.sort }); }
   else if (t.dataset.act === "close") { $("detail").close(); return; }
