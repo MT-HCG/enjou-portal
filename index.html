@@ -57,10 +57,16 @@ h2 { font-size: 16px; margin: 0 0 12px; }
 .lv-S { color: var(--s); } .lv-A { color: var(--a); } .lv-B { color: var(--b); } .lv-C { color: var(--c); } .lv-参考 { color: var(--ref); }
 .tile .n, .tile .sub { color: var(--ink); }
 .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
-.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 16px; }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; align-items: end; }
 .filters label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 .filters select, .filters input[type=search], .filters input[type=password] { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; width: 100%; }
 .filters .check { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); padding-top: 18px; }
+.btn.ghost { border-color: var(--new); color: var(--new); font-weight: 700; }
+.showall { width: 100%; height: 36px; }
+.seg { display: inline-flex; border: 1px solid var(--new); border-radius: 8px; overflow: hidden; }
+.seg button { background: var(--panel); color: var(--new); border: 0; padding: 8px 16px; font-weight: 700; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--new); }
+.seg button[aria-pressed="true"] { background: var(--new); color: #fff; }
 .breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
 .breakdown h3 { font-size: 13px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
 .bar { display: grid; grid-template-columns: minmax(0, 9em) 1fr 2.5em; gap: 8px; align-items: center; width: 100%; padding: 3px 4px; border: 0; background: none; cursor: pointer; border-radius: 4px; text-align: left; font-size: 13px; }
@@ -264,7 +270,10 @@ function render() {
   if (nNew || nUpd) {
     html.push(`<div class="notice alert"><strong>🔔 新着 ${nNew}件・更新 ${nUpd}件</strong>
       <span>${esc(DATA.first_import ? "初回の取り込みです（直近に見つかった案件を新着としています）" : "前回の取り込みから追加・更新された案件があります")}</span>
-      <button class="btn ${F.onlyNew ? "" : "primary"}" data-act="onlyNew">${F.onlyNew ? "すべて表示に戻す" : "新着・更新だけ表示"}</button></div>`);
+      <div class="seg" role="group" aria-label="表示する案件">
+        <button type="button" data-act="mode" data-new="1" aria-pressed="${F.onlyNew}">新着・更新</button>
+        <button type="button" data-act="mode" data-new="0" aria-pressed="${!F.onlyNew}">全件</button>
+      </div></div>`);
   } else {
     html.push(`<div class="notice">新着はありません（前回の取り込みから追加・更新された案件はありません）。</div>`);
   }
@@ -296,8 +305,8 @@ function render() {
     <label>初回発見<select data-f="period">${[["", "全期間"], ["7", "直近7日"], ["30", "直近30日"], ["90", "直近90日"]]
       .map(([v, t]) => `<option value="${v}" ${v === F.period ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <label>キーワード<input type="search" data-f="q" value="${esc(F.q)}" placeholder="例：車検、接客"></label>
-    <label class="check"><input type="checkbox" data-f="onlyNew" ${F.onlyNew ? "checked" : ""}>新着・更新のみ</label>
-  </div><p class="hint"><button class="linkbtn" data-act="reset">絞り込みを元に戻す</button></p>`);
+    <div><button class="btn ghost showall" type="button" data-act="showall">全て表示</button></div>
+  </div>`);
 
   const bars = (title, key, filterKey, limit) => {
     const list = countBy(cases.filter(c => matches(c, filterKey)), key);
@@ -371,8 +380,9 @@ document.addEventListener("click", e => {
     const k = t.dataset.bar, v = t.dataset.v;
     F[k] = F[k] === v ? "" : v;
     if (k === "area") F.shop = "";
-  } else if (t.dataset.act === "onlyNew") { F.onlyNew = !F.onlyNew; }
-  else if (t.dataset.act === "reset") { F = Object.assign({}, DEFAULT); }
+  } else if (t.dataset.act === "mode") { F.onlyNew = t.dataset.new === "1"; }
+  // 全て表示: clear every filter and go back to 全件; 参考 stays hidden as on first opening.
+  else if (t.dataset.act === "showall") { F = Object.assign({}, DEFAULT, { sort: F.sort }); }
   else if (t.dataset.act === "close") { $("detail").close(); return; }
   else if (t.dataset.act === "switch") { Auth.switchAccount(); return; }
   else if (t.dataset.id) { showDetail(t.dataset.id); return; }
