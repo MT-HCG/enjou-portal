@@ -384,8 +384,8 @@ document.addEventListener("click", e => {
     F.onlyNew = t.dataset.new === "1";
     if (!F.onlyNew) F.levels = [...LEVELS];  // 全件: every importance, 参考 included
   }
-  // 全て表示: clear every filter and go back to 全件; 参考 stays hidden as on first opening.
-  else if (t.dataset.act === "showall") { F = Object.assign({}, DEFAULT, { sort: F.sort }); }
+  // 全て表示: clear every filter and go back to 全件, with every importance (参考 included).
+  else if (t.dataset.act === "showall") { F = Object.assign({}, DEFAULT, { sort: F.sort, levels: [...LEVELS] }); }
   else if (t.dataset.act === "close") { $("detail").close(); return; }
   else if (t.dataset.act === "switch") { Auth.switchAccount(); return; }
   else if (t.dataset.id) { showDetail(t.dataset.id); return; }
