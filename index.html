@@ -67,6 +67,7 @@ h2 { font-size: 16px; margin: 0 0 12px; }
 .seg button { background: var(--panel); color: var(--new); border: 0; padding: 8px 16px; font-weight: 700; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--new); }
 .seg button[aria-pressed="true"] { background: var(--new); color: #fff; }
+.bars-hint { margin: 16px 0 0; }
 .breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
 .breakdown h3 { font-size: 13px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
 .bar { display: grid; grid-template-columns: minmax(0, 9em) 1fr 2.5em; gap: 8px; align-items: center; width: 100%; padding: 3px 4px; border: 0; background: none; cursor: pointer; border-radius: 4px; text-align: left; font-size: 13px; }
@@ -318,8 +319,8 @@ function render() {
         <span class="cnt">${n}</span></button>`).join("") || `<div class="empty">該当なし</div>`}
       ${limit && list.length > limit ? `<p class="hint">ほか ${list.length - limit} 店舗</p>` : ""}</div>`;
   };
-  html.push(`<div class="breakdowns">${bars("リスクカテゴリー別", "リスクカテゴリー", "category")}${bars("エリア別", "エリア", "area")}${bars("店舗別（上位10）", "店舗", "shop", 10)}</div>
-    <p class="hint">棒を押すと、その項目で絞り込みます（もう一度押すと解除）。</p></section>`);
+  html.push(`<p class="hint bars-hint">棒を押すと、その項目で絞り込みます（もう一度押すと解除）。</p>
+    <div class="breakdowns">${bars("リスクカテゴリー別", "リスクカテゴリー", "category")}${bars("エリア別", "エリア", "area")}${bars("店舗別（上位10）", "店舗", "shop", 10)}</div></section>`);
 
   // list
   const order = { level: (a, b) => LEVELS.indexOf(levelOf(a)) - LEVELS.indexOf(levelOf(b)) || b["最終更新日時"].localeCompare(a["最終更新日時"]),
