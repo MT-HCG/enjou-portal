@@ -127,6 +127,7 @@ details.run { font-size: 13px; color: var(--muted); margin-top: 8px; }
 <dialog id="detail"></dialog>
 
 <script src="msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // Entra app registration "Enjou-Viewer" (IDs are public, not secrets).
 // The owner of the OneDrive reads the data by its path with Files.Read (no admin consent needed);
@@ -191,8 +192,107 @@ const Auth = (() => {
     if (!d.ok) throw new Error(`データを読み込めませんでした（${d.status}）。`);
     return d.json();
   }
+  async function graphJson(url) {
+    const r = await fetch(url, { headers: { Authorization: "Bearer " + await token() } });
+    if (!r.ok) throw new Error(`OneDrive へのアクセスに失敗しました（${r.status}）。`);
+    return r.json();
+  }
+  // The owner's own files only (Files.Read): list a folder, or read one file's bytes.
+  async function listFolder(path) {
+    let url = `${GRAPH}/me/drive/root:${path.split("/").map(encodeURIComponent).join("/")}:/children?$select=id,name,file&$top=200`;
+    const items = [];
+    while (url) {
+      const page = await graphJson(url);
+      items.push(...(page.value || []));
+      url = page["@odata.nextLink"];
+    }
+    return items;
+  }
+  async function fileBytes(itemId) {
+    const item = await graphJson(`${GRAPH}/me/drive/items/${encodeURIComponent(itemId)}`);
+    const d = await fetch(item["@microsoft.graph.downloadUrl"], { cache: "no-store" });
+    if (!d.ok) throw new Error(`Excel を読み込めませんでした（${d.status}）。`);
+    return d.arrayBuffer();
+  }
   const switchAccount = () => app.loginRedirect({ scopes: ["User.Read"], prompt: "select_account" });
-  return { init, signIn, loadData, switchAccount, user: () => account && account.username };
+  return { init, signIn, loadData, listFolder, fileBytes, isOwner, switchAccount, user: () => account && account.username };
+})();
+
+// ---- administrator: the newest monitoring workbook, read from OneDrive on every opening ----------
+// Same rules as enjou/enjou_sync.py (sheets, columns, text values); 新着/更新 compare the newest file with
+// the file of the previous date. Read only: nothing is written to OneDrive from the page.
+const Live = (() => {
+  const FOLDER = "/炎上";
+  const PATTERN = /^(\d{8})_SNS_?監視.*\.xlsx$/;
+  const CASE_ID = "案件ID", FOUND_AT = "初回発見日時", UPDATED_AT = "最終更新日時";
+  const REQUIRED = [CASE_ID, "エリア", "店舗", "リスクカテゴリー", "重要度", FOUND_AT, UPDATED_AT];
+  const CASE_COLUMNS = [CASE_ID, "エリア", "店舗", "リスクカテゴリー", "副カテゴリー", "重要度", "拡散度", "関連性",
+    "案件ステータス", "現在状態", "初回投稿日", FOUND_AT, "主要情報源", "初回主要投稿URL", "投稿概要",
+    "確認できた事実", "投稿者の主張", "未確認事項", "現在の拡散状況", "継続監視要否", "変化", "再燃状況",
+    "最終確認日時", UPDATED_AT, "投稿者区分", "社員起因リスク区分", "捕捉優先度", "備考"];
+  const RUN_COLUMNS = ["実行開始日時", "実行終了日時", "最終ステータス", "新規案件数", "未確認範囲"];
+  const DATE_ONLY = new Set(["初回投稿日"]);
+  const pad = n => String(n).padStart(2, "0");
+  function text(v, dateOnly) {
+    if (v === null || v === undefined) return "";
+    if (v instanceof Date) {
+      const d = new Date(Math.round(v.getTime() / 1000) * 1000);  // Excel serials can be a few ms off
+      const day = `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+      return dateOnly ? day : `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return String(v).normalize("NFC").trim();
+  }
+  function sheetRows(wb, name, required) {
+    const ws = wb.Sheets[name];
+    if (!ws) { if (required) throw new Error(`Excel に「${name}」シートがありません。`); return { header: [], body: [] }; }
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    if (!rows.length) return { header: [], body: [] };
+    return { header: rows[0].map(h => text(h)),
+             body: rows.slice(1).filter(r => r.some(v => v !== null && v !== "")) };
+  }
+  function records({ header, body }, columns) {
+    const index = new Map(header.map((h, i) => [h, i]).filter(([h]) => h));
+    return body.map(row => Object.fromEntries(columns.map(c =>
+      [c, index.has(c) && index.get(c) < row.length ? text(row[index.get(c)], DATE_ONLY.has(c)) : ""])));
+  }
+  function read(buf) {
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    const sheet = sheetRows(wb, "案件一覧", true);
+    const missing = REQUIRED.filter(c => !sheet.header.includes(c));
+    if (missing.length) throw new Error(`「案件一覧」に必要な列がありません：${missing.join("、")}`);
+    const cases = records(sheet, CASE_COLUMNS).filter(c => c[CASE_ID]);
+    const stores = records(sheetRows(wb, "拠点マスター"), ["エリア", "店舗", "有効／無効"])
+      .filter(r => r["店舗"] && r["有効／無効"] !== "無効").map(r => ({ "エリア": r["エリア"], "店舗": r["店舗"] }));
+    const runs = records(sheetRows(wb, "実行履歴"), RUN_COLUMNS);
+    return { cases, stores, last_run: runs.length ? runs[runs.length - 1] : {} };
+  }
+  async function load() {
+    const now = new Date();
+    const today = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const files = (await Auth.listFolder(FOLDER))
+      .map(it => ({ ...it, name: (it.name || "").normalize("NFC") }))
+      .map(it => ({ ...it, m: PATTERN.exec(it.name) }))
+      .filter(it => it.file && it.m && it.m[1] <= today)
+      .sort((a, b) => b.m[1].localeCompare(a.m[1]) || b.name.localeCompare(a.name));
+    if (!files.length) throw new Error("「炎上」フォルダーに yyyymmdd_SNS_監視.xlsx が見つかりません。");
+    const newest = files[0], previous = files.find(f => f.m[1] < newest.m[1]);
+    const data = read(await Auth.fileBytes(newest.id));
+    const d = newest.m[1], sourceDate = `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6)}`;
+    let newIds, updatedIds;
+    if (previous) {
+      const before = new Map(read(await Auth.fileBytes(previous.id)).cases.map(c => [c[CASE_ID], c[UPDATED_AT]]));
+      newIds = data.cases.filter(c => !before.has(c[CASE_ID])).map(c => c[CASE_ID]);
+      updatedIds = data.cases.filter(c => before.has(c[CASE_ID]) && before.get(c[CASE_ID]) !== c[UPDATED_AT]).map(c => c[CASE_ID]);
+    } else {  // no earlier file: cases found on the file's date or the day before are new
+      const since = new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6) - 1);
+      const sinceText = `${since.getFullYear()}/${pad(since.getMonth() + 1)}/${pad(since.getDate())}`;
+      newIds = data.cases.filter(c => c[FOUND_AT].slice(0, 10) >= sinceText).map(c => c[CASE_ID]);
+      updatedIds = [];
+    }
+    return { ...data, live: true, generated_at: text(now), source_file: newest.name, source_date: sourceDate,
+             compare_file: previous ? previous.name : "", first_import: !previous, new_ids: newIds, updated_ids: updatedIds };
+  }
+  return { load };
 })();
 
 // ---- shared staff: the data published with the page, encrypted with the passphrase ---------------
@@ -266,20 +366,23 @@ function render() {
   const rows = cases.filter(c => matches(c));
   const html = [];
 
+  if (DATA.fallback) html.push(`<div class="notice warn">${esc(DATA.fallback)}</div>`);
   // alert
   const nNew = NEW.size, nUpd = UPD.size;
   if (nNew || nUpd) {
     html.push(`<div class="notice alert"><strong>🔔 新着 ${nNew}件・更新 ${nUpd}件</strong>
-      <span>${esc(DATA.first_import ? "初回の取り込みです（直近に見つかった案件を新着としています）" : "前回の取り込みから追加・更新された案件があります")}</span>
+      <span>${esc(DATA.live
+        ? (DATA.compare_file ? `前の日付のファイル（${DATA.compare_file}）から追加・更新された案件があります` : "比べる前の日付のファイルがないため、直近に見つかった案件を新着としています")
+        : (DATA.first_import ? "初回の取り込みです（直近に見つかった案件を新着としています）" : "前回の取り込みから追加・更新された案件があります"))}</span>
       <div class="seg" role="group" aria-label="表示する案件">
         <button type="button" data-act="mode" data-new="1" aria-pressed="${F.onlyNew}">新着・更新</button>
         <button type="button" data-act="mode" data-new="0" aria-pressed="${!F.onlyNew}">全件</button>
       </div></div>`);
   } else {
-    html.push(`<div class="notice">新着はありません（前回の取り込みから追加・更新された案件はありません）。</div>`);
+    html.push(`<div class="notice">新着はありません（${esc(DATA.live && DATA.compare_file ? `前の日付のファイル（${DATA.compare_file}）` : "前回の取り込み")}から追加・更新された案件はありません）。</div>`);
   }
   if (DATA.source_date !== ymd(new Date())) {
-    html.push(`<div class="notice warn">本日分の監視ファイルはまだ取り込まれていません。${esc(DATA.source_date)} 分を表示しています。</div>`);
+    html.push(`<div class="notice warn">${DATA.live ? "本日分の監視ファイルは、まだ「炎上」フォルダーにありません。" : "本日分の監視ファイルはまだ取り込まれていません。"}${esc(DATA.source_date)} 分を表示しています。</div>`);
   }
 
   // summary
@@ -414,7 +517,7 @@ $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("de
 function show(data, who) {
   DATA = data;
   NEW = new Set(DATA.new_ids || []); UPD = new Set(DATA.updated_ids || []);
-  $("meta").textContent = `取り込み ${DATA.generated_at}（${DATA.source_file}）・案件 ${DATA.cases.length}件・閲覧のみ`;
+  $("meta").textContent = `${DATA.live ? "読み込み" : "取り込み"} ${DATA.generated_at}（${DATA.source_file}）・案件 ${DATA.cases.length}件・閲覧のみ`;
   if (who) $("user").innerHTML = who;
   render();
 }
@@ -452,7 +555,13 @@ document.addEventListener("click", e => {
     if (!await Auth.init()) return landing();  // not signed in: passphrase or the administrator's sign-in
     $("user").innerHTML = `${esc(Auth.user())}<button class="linkbtn" data-act="switch">切り替え</button>`;
     $("main").innerHTML = `<div class="notice">OneDrive から読み込んでいます…</div>`;
-    show(await Auth.loadData());
+    if (!Auth.isOwner()) return show(await Auth.loadData());
+    try { show(await Live.load()); }
+    catch (e) {  // the newest workbook could not be read: show the daily import instead
+      const data = await Auth.loadData();
+      data.fallback = `最新の Excel を読めなかったため、毎朝の取り込みデータを表示しています（${e.message || e}）。`;
+      show(data);
+    }
   } catch (e) {
     fail(e);
   }
