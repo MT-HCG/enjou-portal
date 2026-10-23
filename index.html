@@ -99,6 +99,10 @@ dialog::backdrop { background: rgba(10, 14, 22, .55); }
 .dlg-body dl { margin: 0; display: grid; grid-template-columns: 9em 1fr; gap: 6px 12px; }
 .dlg-body dt { color: var(--muted); font-size: 13px; }
 .dlg-body dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.worklog { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.worklog summary { cursor: pointer; color: var(--accent); }
+.worklog ul { margin: 8px 0 0; padding-left: 1.2em; }
+.worklog li { margin-bottom: 4px; overflow-wrap: anywhere; }
 .open-link { display: inline-block; margin: 4px 0 14px; padding: 8px 14px; border-radius: 6px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
 details.run { font-size: 13px; color: var(--muted); margin-top: 8px; }
 @media (max-width: 640px) {
@@ -458,18 +462,30 @@ function card(c) {
 
 const DETAIL_FIELDS = ["エリア", "店舗", "リスクカテゴリー", "副カテゴリー", "重要度", "拡散度", "関連性", "案件ステータス", "現在状態",
   "投稿概要", "確認できた事実", "投稿者の主張", "未確認事項", "現在の拡散状況", "変化", "再燃状況", "継続監視要否",
-  "初回投稿日", "初回発見日時", "最終確認日時", "最終更新日時", "主要情報源", "投稿者区分", "社員起因リスク区分", "捕捉優先度", "備考", "案件ID"];
+  "初回投稿日", "初回発見日時", "最終確認日時", "最終更新日時", "主要情報源", "投稿者区分", "社員起因リスク区分", "捕捉優先度", "案件ID"];
+
+// 備考 = the reading note, then the monitoring tool's dated work log ("2026/09/09: 日次監視を実施…" or
+// "RUN-…"), joined with " / ". The note is shown; the log is folded away, newest first.
+const LOG_ENTRY = /^(\d{4}\/\d{1,2}\/\d{1,2}(?:[-~～〜][\d\/]+)?|RUN-[\d-]+)\s*[:：。]/;
+function splitNotes(text) {
+  const parts = String(text || "").split(/\s+\/\s+/).map(p => p.trim()).filter(Boolean);
+  return { note: parts.filter(p => !LOG_ENTRY.test(p)).join("\n"), log: parts.filter(p => LOG_ENTRY.test(p)).reverse() };
+}
 
 function showDetail(id) {
   const c = DATA.cases.find(x => x["案件ID"] === id);
   if (!c) return;
   const url = safeUrl(c["初回主要投稿URL"]);
+  const notes = splitNotes(c["備考"]);
   const dlg = $("detail");
   dlg.innerHTML = `<div class="dlg-head"><div class="badges"><span class="badge level lv-${levelOf(c)}">${esc(levelOf(c))}</span>
       ${NEW.has(id) ? `<span class="badge new">新着</span>` : UPD.has(id) ? `<span class="badge upd">更新</span>` : ""}
       <strong>${esc(c["店舗"])}</strong></div><button class="btn" data-act="close">閉じる</button></div>
     <div class="dlg-body">${url ? `<a class="open-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">元の投稿を開く ↗</a>` : ""}
-    <dl>${DETAIL_FIELDS.filter(k => c[k]).map(k => `<dt>${esc(k)}</dt><dd>${esc(c[k])}</dd>`).join("")}</dl></div>`;
+    <dl>${DETAIL_FIELDS.filter(k => c[k] && k !== "案件ID").map(k => `<dt>${esc(k)}</dt><dd>${esc(c[k])}</dd>`).join("")}
+    ${notes.note ? `<dt>注意書き</dt><dd>${esc(notes.note)}</dd>` : ""}<dt>案件ID</dt><dd>${esc(id)}</dd></dl>
+    ${notes.log.length ? `<details class="worklog"><summary>監視の記録（${notes.log.length}件）</summary>
+      <ul>${notes.log.map(e => `<li>${esc(e)}</li>`).join("")}</ul></details>` : ""}</div>`;
   dlg.showModal();
 }
 
