@@ -41,6 +41,8 @@ h1 .brand { font-family: "Nunito", "Segoe UI", sans-serif; font-weight: 900; fon
 .notice { margin: 16px 0 0; padding: 12px 16px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
 .notice.alert { border: 2px solid var(--new); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .notice.alert strong { color: var(--new); font-size: 17px; }
+.notice.alert.quiet { border-color: var(--line); }
+.notice.alert.quiet strong { color: var(--ink); }
 .notice.warn { border-left: 4px solid var(--b); }
 .notice.error { border-left: 4px solid var(--a); white-space: pre-wrap; }
 .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
@@ -373,18 +375,18 @@ function render() {
   if (DATA.fallback) html.push(`<div class="notice warn">${esc(DATA.fallback)}</div>`);
   // alert
   const nNew = NEW.size, nUpd = UPD.size;
-  if (nNew || nUpd) {
-    html.push(`<div class="notice alert"><strong>🔔 新着 ${nNew}件・更新 ${nUpd}件</strong>
-      <span>${esc(DATA.live
-        ? (DATA.compare_file ? `前の日付のファイル（${DATA.compare_file}）から追加・更新された案件があります` : "比べる前の日付のファイルがないため、直近に見つかった案件を新着としています")
+  // Shown every time, with 0件 too, so the 新着・更新 / 全件 choice is always there.
+  const since = DATA.live && DATA.compare_file ? `前の日付のファイル（${DATA.compare_file}）` : "前回の取り込み";
+  const hasFresh = nNew || nUpd;
+  html.push(`<div class="notice alert ${hasFresh ? "" : "quiet"}"><strong>🔔 新着 ${nNew}件・更新 ${nUpd}件</strong>
+    <span>${esc(!hasFresh ? `${since}から追加・更新された案件はありません`
+      : DATA.live
+        ? (DATA.compare_file ? `${since}から追加・更新された案件があります` : "比べる前の日付のファイルがないため、直近に見つかった案件を新着としています")
         : (DATA.first_import ? "初回の取り込みです（直近に見つかった案件を新着としています）" : "前回の取り込みから追加・更新された案件があります"))}</span>
-      <div class="seg" role="group" aria-label="表示する案件">
-        <button type="button" data-act="mode" data-new="1" aria-pressed="${F.onlyNew}">新着・更新</button>
-        <button type="button" data-act="mode" data-new="0" aria-pressed="${!F.onlyNew}">全件</button>
-      </div></div>`);
-  } else {
-    html.push(`<div class="notice">新着はありません（${esc(DATA.live && DATA.compare_file ? `前の日付のファイル（${DATA.compare_file}）` : "前回の取り込み")}から追加・更新された案件はありません）。</div>`);
-  }
+    <div class="seg" role="group" aria-label="表示する案件">
+      <button type="button" data-act="mode" data-new="1" aria-pressed="${F.onlyNew}">新着・更新</button>
+      <button type="button" data-act="mode" data-new="0" aria-pressed="${!F.onlyNew}">全件</button>
+    </div></div>`);
   if (DATA.source_date !== ymd(new Date())) {
     html.push(`<div class="notice warn">${DATA.live ? "本日分の監視ファイルは、まだ「炎上」フォルダーにありません。" : "本日分の監視ファイルはまだ取り込まれていません。"}${esc(DATA.source_date)} 分を表示しています。</div>`);
   }
